@@ -2,7 +2,7 @@
 # fmt: off
 from dataclasses import dataclass
 import triton
-from triton_kernels.target_info import get_cdna_version
+from triton_kernels.target_info import get_cdna_version, has_native_mxfp
 import torch
 from .opt_flags_details import opt_flags_amd, opt_flags_nvidia
 
@@ -176,7 +176,9 @@ def make_default_opt_flags_nvidia(
         has_simple_epilogue = precision_config.max_num_imprecise_acc is None
         is_persistent = supports_persistent and has_simple_epilogue and (tiles_per_sm >= 2.0 or lhs_dtype.itemsize <= 1) and out_dtype.itemsize < 4
         # TEMP CHANGE
-        if precision_config.act_scale is not None or precision_config.out_scale is not None:
+        if has_native_mxfp() and precision_config.weight_scale is not None:
+            is_persistent = True
+        elif precision_config.act_scale is not None or precision_config.out_scale is not None:
             is_persistent = False
     # block k
     if constraints.get("block_k", None) is not None:
@@ -187,6 +189,8 @@ def make_default_opt_flags_nvidia(
     if constraints.get("split_k", None) is not None:
         split_k = constraints["split_k"]
     elif is_persistent or enforce_bitwise_invariance or precision_config.act_scale is not None or precision_config.out_scale is not None:
+        split_k = 1
+    elif has_native_mxfp() and precision_config.weight_scale is not None:
         split_k = 1
     else:
         estimated_actual_grid_size = opt_flags_nvidia.compute_grid_size(None, m, n, block_m, block_n)

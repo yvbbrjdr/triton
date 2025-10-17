@@ -372,6 +372,9 @@ def _p_matmul_ogs(
         else:
             w_scale = load_scale(WScale)
 
+        if SWAP_XW:
+            acc = acc.T
+
         accs = (acc,)
         biases = (bias,)
 
@@ -395,9 +398,6 @@ def _p_matmul_ogs(
         for a_i in tl.static_range(len(accs)):
             acc_tile = accs[a_i]
             acc_tile *= x_scale * w_scale
-
-            if SWAP_XW:
-                acc_tile = acc_tile.T
 
             acc_tile = acc_tile + biases[a_i][None, :] * betas[:, None]
             if out_alpha is not None:
